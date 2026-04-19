@@ -1,0 +1,83 @@
+plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.3.0'
+    id 'io.spring.dependency-management' version '1.1.4'
+}
+
+group = 'com.nium'
+version = '1.0.0'
+sourceCompatibility = '21'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Spring Boot Web Starter
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+
+    // Spring Boot Validation Starter
+    implementation 'org.springframework.boot:spring-boot-starter-validation'
+
+    // Spring Boot Data JPA (for transaction support, even with jOOQ)
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+
+    // H2 Database
+    runtimeOnly 'com.h2database:h2'
+
+    // Flyway for database migrations
+    implementation 'org.flywaydb:flyway-core'
+
+    // jOOQ
+    implementation 'org.jooq:jooq:3.19.8'
+
+    // Spring Boot Actuator for metrics and health
+    implementation 'org.springframework.boot:spring-boot-starter-actuator'
+
+    // Micrometer for metrics
+    implementation 'io.micrometer:micrometer-core'
+
+    // OpenAPI / Swagger UI
+    implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.3.0'
+
+    // Lombok
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+
+    // Logging (included with Spring Boot Starter Web, but explicitly for clarity)
+    implementation 'org.springframework.boot:spring-boot-starter-logging'
+
+    // Test Dependencies
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+
+    // JUnit 5 (included in spring-boot-starter-test)
+
+    // Testcontainers (optional, for future Postgres testing)
+    //testImplementation 'org.testcontainers:testcontainers:1.19.3'
+    //testImplementation 'org.testcontainers:postgresql:1.19.3'
+
+    // AssertJ for fluent assertions in tests
+    testImplementation 'org.assertj:assertj-core'
+
+    // Bucket4j for rate limiting
+    //implementation 'com.bucket4j:bucket4j-core:8.7.0'
+    implementation 'com.bucket4j:bucket4j_jdk17-core:8.15.0'
+    //implementation 'com.bucket4j:bucket4j-jcache:8.7.0'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+
+springBoot {
+    mainClass = 'com.nium.virtualcard.VirtualCardIssuanceApplication'
+}
+
+bootJar {
+    archiveFileName = 'virtual-card-issuance-app.jar'
+}
+
+// Configure Gradle wrapper
+wrapper {
+    gradleVersion = '8.8'
+}
