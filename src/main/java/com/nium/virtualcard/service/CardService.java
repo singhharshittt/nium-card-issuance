@@ -28,6 +28,9 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
+import static com.nium.virtualcard.model.TransactionType.SPEND;
+import static com.nium.virtualcard.model.TransactionType.TOP_UP;
+
 /**
  * Service layer for card operations.
  *
@@ -126,14 +129,14 @@ public class CardService {
 
         validateTopUpRequest(request, idempotencyKey);
 
-        if (isIdempotentRetry(cardId, TransactionType.TOP_UP, idempotencyKey)) {
+        if (isIdempotentRetry(cardId, TOP_UP, idempotencyKey)) {
             return handleIdempotentTopUp(cardId);
         }
 
         Card card = findCardById(cardId);
-        validateCardForOperation(card, cardId, "top-up");
+        validateCardForOperation(card, cardId, TOP_UP);
 
-        Card updatedCard = performBalanceUpdateWithRetry(cardId, card, request.getAmount(), "top-up", idempotencyKey);
+        Card updatedCard = performBalanceUpdateWithRetry(cardId, card, request.getAmount(), TOP_UP, idempotencyKey);
 
         createTopUpTransaction(cardId, request.getAmount(), idempotencyKey);
         handleTopUpSuccess(cardId, updatedCard.getBalance());
@@ -165,15 +168,15 @@ public class CardService {
 
         validateSpendRequest(request, idempotencyKey);
 
-        if (isIdempotentRetry(cardId, TransactionType.SPEND, idempotencyKey)) {
+        if (isIdempotentRetry(cardId, SPEND, idempotencyKey)) {
             return handleIdempotentSpend(cardId);
         }
 
         Card card = findCardById(cardId);
-        validateCardForOperation(card, cardId, "spend");
+        validateCardForOperation(card, cardId, SPEND);
         validateSufficientFunds(card, request.getAmount(), cardId, idempotencyKey);
 
-        Card updatedCard = performBalanceUpdateWithRetry(cardId, card, request.getAmount(), "spend", idempotencyKey);
+        Card updatedCard = performBalanceUpdateWithRetry(cardId, card, request.getAmount(), SPEND, idempotencyKey);
 
         createSpendTransaction(cardId, request.getAmount(), idempotencyKey);
         handleSpendSuccess(cardId, updatedCard.getBalance());
@@ -238,17 +241,17 @@ public class CardService {
         if (request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Top-up amount must be positive");
         }
-        validateIdempotencyKey(idempotencyKey, "top-up");
+        validateIdempotencyKey(idempotencyKey, TOP_UP);
     }
 
     private void validateSpendRequest(SpendRequest request, String idempotencyKey) {
         if (request.getAmount().compareTo(BigDecimal.ZERO) <= 0) {
             throw new IllegalArgumentException("Spend amount must be positive");
         }
-        validateIdempotencyKey(idempotencyKey, "spend");
+        validateIdempotencyKey(idempotencyKey, SPEND);
     }
 
-    private void validateIdempotencyKey(String idempotencyKey, String operation) {
+    private void validateIdempotencyKey(String idempotencyKey, TransactionType operation) {
         if (idempotencyKey == null || idempotencyKey.trim().isEmpty()) {
             throw new IllegalArgumentException("Idempotency-Key header is required for " + operation);
         }
@@ -272,7 +275,7 @@ public class CardService {
         return mapCardToResponse(card);
     }
 
-    private void validateCardForOperation(Card card, UUID cardId, String operation) {
+    private void validateCardForOperation(Card card, UUID cardId, TransactionType operation) {
         if (card.getStatus() != CardStatus.ACTIVE) {
             log.warn("{} attempted on non-active card {}: status={}", operation, cardId, card.getStatus());
             throw new InvalidCardStateException(cardId, card.getStatus(), CardStatus.ACTIVE);
@@ -284,17 +287,17 @@ public class CardService {
             log.warn("Insufficient funds for spend on card {}: balance={}, requested={}",
                     cardId, card.getBalance(), amount);
             meterRegistry.counter("card.spend.declined.count").increment();
-            transactionService.createDeclinedTransaction(cardId, TransactionType.SPEND, amount, idempotencyKey, "Insufficient funds");
+            transactionService.createDeclinedTransaction(cardId, SPEND, amount, idempotencyKey, "Insufficient funds");
             throw new InsufficientFundsException(cardId, card.getBalance(), amount);
         }
     }
 
-    private Card performBalanceUpdateWithRetry(UUID cardId, Card initialCard, BigDecimal amount, String operation, String idempotencyKey) {
+    private Card performBalanceUpdateWithRetry(UUID cardId, Card initialCard, BigDecimal amount, TransactionType operation, String idempotencyKey) {
         Card currentCard = initialCard;
         int retryCount = 0;
 
         while (retryCount < maxRetries) {
-            var updateAmount = operation.equals("top-up") ? amount : amount.negate();
+            var updateAmount = TOP_UP.equals(operation) ? amount : amount.negate();
             var newBalance = currentCard.getBalance().add(updateAmount);
 
             boolean updateSucceeded = cardRepository.updateCardBalanceIfVersionMatches(
@@ -315,7 +318,7 @@ public class CardService {
             currentCard = findCardById(cardId);
 
             // For spend, re-check balance after reload
-            if (operation.equals("spend") && currentCard.getBalance().compareTo(amount) < 0) {
+            if (SPEND.equals(operation) && currentCard.getBalance().compareTo(amount) < 0) {
                 handleInsufficientFundsDuringRetry(cardId, amount, currentCard.getBalance(), idempotencyKey);
             }
         }
@@ -329,15 +332,15 @@ public class CardService {
         log.warn("Balance became insufficient during retry for card {}: balance={}, requested={}",
                 cardId, currentBalance, requestedAmount);
         meterRegistry.counter("card.spend.declined.count").increment();
-        transactionService.createDeclinedTransaction(cardId, TransactionType.SPEND, requestedAmount, idempotencyKey, "Insufficient funds (concurrent)");
+        transactionService.createDeclinedTransaction(cardId, SPEND, requestedAmount, idempotencyKey, "Insufficient funds (concurrent)");
         throw new InsufficientFundsException(cardId, currentBalance, requestedAmount);
     }
 
-    private void handleRetryExhaustion(UUID cardId, String operation, int retryCount) {
+    private void handleRetryExhaustion(UUID cardId, TransactionType operation, int retryCount) {
         log.error("Concurrent update conflict on {} for card: {}, exhausted {} retries",
                 operation, cardId, maxRetries);
         meterRegistry.counter("optimistic.lock.failure.count").increment();
-        if (operation.equals("spend")) {
+        if (SPEND.equals(operation)) {
             meterRegistry.counter("card.spend.failure.count").increment();
         } else {
             meterRegistry.counter("card.topup.failure.count").increment();
@@ -346,11 +349,11 @@ public class CardService {
     }
 
     private void createTopUpTransaction(UUID cardId, BigDecimal amount, String idempotencyKey) {
-        transactionService.createSuccessfulTransaction(cardId, TransactionType.TOP_UP, amount, idempotencyKey);
+        transactionService.createSuccessfulTransaction(cardId, TOP_UP, amount, idempotencyKey);
     }
 
     private void createSpendTransaction(UUID cardId, BigDecimal amount, String idempotencyKey) {
-        transactionService.createSuccessfulTransaction(cardId, TransactionType.SPEND, amount, idempotencyKey);
+        transactionService.createSuccessfulTransaction(cardId, SPEND, amount, idempotencyKey);
     }
 
     private void handleTopUpSuccess(UUID cardId, BigDecimal newBalance) {
