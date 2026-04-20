@@ -169,8 +169,10 @@ http://localhost:8080/api/actuator/metrics
 Tracked metrics:
 - `card.created.count` - Total cards created
 - `card.topup.success.count` - Successful top-ups
+- `card.topup.failure.count` - Failed topups (e.g., failed due to optimistic locks and retries)
 - `card.spend.success.count` - Successful spends
 - `card.spend.declined.count` - Declined spends (insufficient funds)
+- `card.spend.failure.count` - Failed spends (e.g., failed due to optimistic locks and retries)
 - `idempotency.hit.count` - Idempotent retries
 - `optimistic.lock.retry.count` - Retry attempts
 - `optimistic.lock.failure.count` - Exhausted retries

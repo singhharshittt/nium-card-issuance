@@ -32,6 +32,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
+import static com.nium.virtualcard.util.MetricConstants.*;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -123,7 +124,7 @@ class CardServiceTest {
         cardService.createCard(request);
 
         // Assert
-        assertThat(meterRegistry.counter("card.created.count").count()).isEqualTo(1);
+        assertThat(meterRegistry.counter(CARD_CREATED_COUNT).count()).isEqualTo(1);
     }
 
     // ==================== Card Retrieval Tests ====================
@@ -208,7 +209,7 @@ class CardServiceTest {
             eq(cardId), eq(TransactionType.TOP_UP), eq(new BigDecimal("500.00")), eq(idempotencyKey));
 
         // Verify metrics
-        assertThat(meterRegistry.counter("card.topup.success.count").count()).isEqualTo(1);
+        assertThat(meterRegistry.counter(CARD_TOP_UP_SUCCESS_COUNT).count()).isEqualTo(1);
     }
 
     @Test
@@ -293,7 +294,7 @@ class CardServiceTest {
         verify(cardRepository, never()).updateCardBalanceIfVersionMatches(any(), any(), any());
 
         // Verify idempotency hit metric
-        assertThat(meterRegistry.counter("idempotency.hit.count").count()).isEqualTo(1);
+        assertThat(meterRegistry.counter(IDEMPOTENCY_HIT_COUNT).count()).isEqualTo(1);
     }
 
     @Test
@@ -351,7 +352,7 @@ class CardServiceTest {
         assertThat(response.getBalance()).isEqualTo(new BigDecimal("1500.00"));
 
         // Verify retry occurred
-        assertThat(meterRegistry.counter("optimistic.lock.retry.count").count()).isEqualTo(1);
+        assertThat(meterRegistry.counter(OPTIMISTIC_LOCK_RETRY_COUNT).count()).isEqualTo(1);
     }
 
     // ==================== Spend Tests ====================
@@ -398,7 +399,7 @@ class CardServiceTest {
             eq(cardId), eq(TransactionType.SPEND), eq(new BigDecimal("300.00")), eq(idempotencyKey));
 
         // Verify metrics
-        assertThat(meterRegistry.counter("card.spend.success.count").count()).isEqualTo(1);
+        assertThat(meterRegistry.counter(CARD_SPEND_SUCCESS_COUNT).count()).isEqualTo(1);
     }
 
     @Test
@@ -431,7 +432,7 @@ class CardServiceTest {
             eq(cardId), eq(TransactionType.SPEND), eq(new BigDecimal("300.00")), eq(idempotencyKey), eq("Insufficient funds"));
 
         // Verify spend declined metric
-        assertThat(meterRegistry.counter("card.spend.declined.count").count()).isEqualTo(1);
+        assertThat(meterRegistry.counter(CARD_SPEND_DECLINED_COUNT).count()).isEqualTo(1);
     }
 
     @Test
@@ -502,7 +503,7 @@ class CardServiceTest {
         verify(cardRepository, never()).updateCardBalanceIfVersionMatches(any(), any(), any());
 
         // Verify idempotency hit metric
-        assertThat(meterRegistry.counter("idempotency.hit.count").count()).isEqualTo(1);
+        assertThat(meterRegistry.counter(IDEMPOTENCY_HIT_COUNT).count()).isEqualTo(1);
     }
 
     @Test
@@ -581,8 +582,8 @@ class CardServiceTest {
                 .isInstanceOf(ConcurrentUpdateException.class);
 
         // Verify retry attempts
-        assertThat(meterRegistry.counter("optimistic.lock.retry.count").count()).isGreaterThan(0);
-        assertThat(meterRegistry.counter("optimistic.lock.failure.count").count()).isEqualTo(1);
+        assertThat(meterRegistry.counter(OPTIMISTIC_LOCK_RETRY_COUNT).count()).isGreaterThan(0);
+        assertThat(meterRegistry.counter(OPTIMISTIC_LOCK_FAILURE_COUNT).count()).isEqualTo(1);
     }
 
     // ==================== Transaction History Tests ====================
